@@ -1,0 +1,77 @@
+---
+title: "Pitch Preference by Nationality"
+format: html
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+In this analysis, we explore whether MLB pitchers from different countries display noticeable preferences in pitch selection. Using Statcast pitch-level data from WBC rosters, we compare pitch usage rates across the top represented countries.
+
+```{r}
+library(tidyverse)
+library(plotly)
+
+# Load Statcast pitching data
+pitch_data <- read_csv("data/statcast_pitchers.csv", show_col_types = FALSE)
+
+# Map Statcast pitch abbreviations to full names
+pitch_labels <- c(
+  "FF" = "4-Seam Fastball",
+  "SI" = "Sinker",
+  "SL" = "Slider",
+  "CH" = "Changeup",
+  "FC" = "Cutter",
+  "ST" = "Sweeper",
+  "CU" = "Curveball",
+  "FS" = "Splitter",
+  "KC" = "Knuckle Curve",
+  "SV" = "Slurve"
+)
+
+# Identify the top 6 countries by pitch volume
+top_countries <- pitch_data |>
+  count(country_name) |>
+  slice_max(n, n = 6) |>
+  pull(country_name)
+
+# Calculate percentage usage for each pitch type by country
+pitch_summary <- pitch_data |>
+  filter(country_name %in% top_countries, pitch_type %in% names(pitch_labels)) |>
+  mutate(pitch_name = pitch_labels[pitch_type]) |>
+  count(country_name, pitch_name) |>
+  group_by(country_name) |>
+  mutate(pct = round(n / sum(n) * 100, 1)) |>
+  ungroup()
+
+# Build horizontal bar plot faceted across countries
+p <- ggplot(pitch_summary, aes(
+  x = pct,
+  y = reorder(pitch_name, pct),
+  fill = country_name,
+  text = paste0(
+    "<b>", country_name, "</b><br>",
+    pitch_name, ": ", pct, "%<br>",
+    "Pitches: ", scales::comma(n)
+  )
+)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~country_name, nrow = 2) +
+  scale_x_continuous(labels = \(x) paste0(x, "%")) +
+  scale_fill_brewer(palette = "Set2") +
+  labs(
+    title = "Pitch Selection by Pitcher Nationality",
+    subtitle = "Percentage of total pitches thrown by country (top 6 countries)",
+    x = "Usage (%)",
+    y = NULL
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    strip.text = element_text(face = "bold", size = 11),
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(face = "bold", size = 14)
+  )
+
+ggplotly(p, tooltip = "text")
+```
